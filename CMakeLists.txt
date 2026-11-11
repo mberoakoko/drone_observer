@@ -40,7 +40,10 @@ add_executable(drone_observer main.cpp
         include/drone_observer/estimation/ghkf_observer.hpp
         include/drone_observer/estimation/ckf_observer.hpp
         include/drone_observer/estimation/ekf_observer.hpp
-        include/drone_observer/sensors/sensor.hpp)
+        include/drone_observer/sensors/sensor.hpp
+        include/drone_observer/control/trajectories.hpp
+        include/drone_observer/control/trajectories.hpp
+        include/drone_observer/control/cascaded_controller.hpp)
 
 target_include_directories(drone_observer PRIVATE
         ${EIGEN3_INCLUDE_DIR}

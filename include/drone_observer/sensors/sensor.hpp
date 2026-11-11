@@ -8,6 +8,7 @@
 #include <Eigen/Dense>
 #include <random>
 #include <memory>
+#include <utility>
 
 namespace drone_observer::sensor{
     /**
@@ -56,10 +57,10 @@ namespace drone_observer::sensor{
         std::normal_distribution<double> noise_dist_;
 
     public:
-        explicit UWBRangeSensor(const Eigen::Vector3d& anchor = Eigen::Vector3d::Zero(),
-                               double std_dev = 0.02,
+        explicit UWBRangeSensor(Eigen::Vector3d  anchor = Eigen::Vector3d::Zero(),
+                               const double std_dev = 0.02,
                                unsigned int seed = 42)
-            : std_dev_(std_dev), anchor_pos_(anchor), generator_(seed), noise_dist_(0.0, std_dev) {}
+            :anchor_pos_(std::move(anchor)), generator_(seed), noise_dist_(0.0, std_dev) {}
 
         Eigen::VectorXd sample(const Eigen::Matrix<double, 13, 1>& x_true) override {
             Eigen::Vector3d pos = x_true.segment<3>(0);
