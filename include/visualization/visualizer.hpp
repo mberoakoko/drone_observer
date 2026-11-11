@@ -11,28 +11,28 @@
 
 namespace drone_observer {
     class DroneVisualizer {
-    private:
-        const std::string window_name_ = "Drone Observer: 3D Tracking Visualizer";
+        const std::string window_name_ = "Drone Observer: Multi-Filter Comparison (EKF vs CKF vs GHKF)";
+
         std::vector<Eigen::Vector3d> true_path_;
         std::vector<Eigen::Vector3d> ekf_path_;
+        std::vector<Eigen::Vector3d> ckf_path_;
+        std::vector<Eigen::Vector3d> ghkf_path_;
 
-        double arm_length_ = 0.25; // 25 cm arm radius
+        double arm_length_ = 0.25;
 
     public:
         DroneVisualizer() = default;
 
-        void init(int width = 1024, int height = 768) const {
+        void init(int width = 1024, int height = 768) {
             pangolin::CreateWindowAndBind(window_name_, width, height);
             glEnable(GL_DEPTH_TEST);
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-            // Define Projection and Initial Viewpoint Camera
             pangolin::OpenGlRenderState &s_cam = getCameraState();
+            pangolin::Handler3D *handler = new pangolin::Handler3D(s_cam);
 
-            // Add Interactive Viewport
-            auto *handler = new pangolin::Handler3D(s_cam);
-            pangolin::View &d_cam = pangolin::CreateDisplay()
+            pangolin::CreateDisplay()
                     .SetBounds(0.0, 1.0, 0.0, 1.0, -1024.0 / 768.0)
                     .SetHandler(handler);
         }
@@ -40,7 +40,7 @@ namespace drone_observer {
         static pangolin::OpenGlRenderState &getCameraState() {
             static pangolin::OpenGlRenderState s_cam(
                 pangolin::ProjectionMatrix(1024, 768, 420, 420, 512, 384, 0.1, 1000),
-                pangolin::ModelViewLookAt(3.0, 3.0, 3.0, 0.0, 0.0, 1.5, pangolin::AxisZ)
+                pangolin::ModelViewLookAt(3.5, 3.5, 3.5, 0.0, 0.0, 1.5, pangolin::AxisZ)
             );
             return s_cam;
         }
@@ -48,33 +48,48 @@ namespace drone_observer {
         void update(const Eigen::Vector3d &pos_true,
                     const Eigen::Quaterniond &q_true,
                     const Eigen::Vector3d &pos_ekf,
+                    const Eigen::Vector3d &pos_ckf,
+                    const Eigen::Vector3d &pos_ghkf,
                     const Eigen::Vector3d &z_target) {
             true_path_.push_back(pos_true);
             ekf_path_.push_back(pos_ekf);
+            ckf_path_.push_back(pos_ckf);
+            ghkf_path_.push_back(pos_ghkf);
 
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            glClearColor(0.1f, 0.11f, 0.12f, 1.0f); // Dark background
+            glClearColor(0.1f, 0.11f, 0.12f, 1.0f);
 
             pangolin::OpenGlRenderState &s_cam = getCameraState();
-            d_cam_activate(s_cam);
+            pangolin::DisplayBase().Activate(s_cam);
 
-            // 1. Draw Ground Plane & Grid
+            // 1. Draw Environment Grid & World Axes
             drawGrid();
 
-            // 2. Draw Target Altitude Marker (Yellow Wireframe Ring/Box)
+            // 2. Draw Target Setpoint Ring
             drawTargetMarker(z_target);
 
-            // 3. Draw Trajectory Lines (Green = True Ground Truth, Red = EKF Estimate)
+            // 3. Draw All Trajectory Lines
             drawTrajectories();
 
-            // 4. Draw Drone Frame at True Pose
+            // 4. Draw True Drone Frame Mesh
             drawDroneFrame(pos_true, q_true);
 
-            // 5. Draw EKF Estimate Position as a Magenta Point
+            // 5. Draw Estimator Position Nodes
             glPointSize(8.0f);
             glBegin(GL_POINTS);
-            glColor3f(1.0f, 0.0f, 1.0f); // Magenta
+
+            // EKF = Red
+            glColor3f(1.0f, 0.2f, 0.2f);
             glVertex3d(pos_ekf.x(), pos_ekf.y(), pos_ekf.z());
+
+            // CKF = Cyan
+            glColor3f(0.0f, 0.9f, 1.0f);
+            glVertex3d(pos_ckf.x(), pos_ckf.y(), pos_ckf.z());
+
+            // GHKF = Yellow
+            glColor3f(1.0f, 0.85f, 0.1f);
+            glVertex3d(pos_ghkf.x(), pos_ghkf.y(), pos_ghkf.z());
+
             glEnd();
 
             pangolin::FinishFrame();
@@ -85,10 +100,6 @@ namespace drone_observer {
         }
 
     private:
-        void d_cam_activate(pangolin::OpenGlRenderState &s_cam) {
-            pangolin::DisplayBase().Activate(s_cam);
-        }
-
         void drawGrid() {
             glColor3f(0.25f, 0.25f, 0.25f);
             glLineWidth(1.0f);
@@ -101,23 +112,22 @@ namespace drone_observer {
             }
             glEnd();
 
-            // Coordinate Axes at Origin
             glLineWidth(2.0f);
             glBegin(GL_LINES);
             glColor3f(1.0f, 0.0f, 0.0f);
             glVertex3f(0, 0, 0);
-            glVertex3f(0.5f, 0, 0); // X-Red
+            glVertex3f(0.5f, 0, 0);
             glColor3f(0.0f, 1.0f, 0.0f);
             glVertex3f(0, 0, 0);
-            glVertex3f(0, 0.5f, 0); // Y-Green
+            glVertex3f(0, 0.5f, 0);
             glColor3f(0.0f, 0.0f, 1.0f);
             glVertex3f(0, 0, 0);
-            glVertex3f(0, 0, 0.5f); // Z-Blue
+            glVertex3f(0, 0, 0.5f);
             glEnd();
         }
 
         void drawTargetMarker(const Eigen::Vector3d &target) {
-            glColor4f(1.0f, 0.84f, 0.0f, 0.4f); // Transparent Gold
+            glColor4f(1.0f, 0.84f, 0.0f, 0.4f);
             glLineWidth(1.5f);
             glBegin(GL_LINE_LOOP);
             const int segs = 16;
@@ -130,46 +140,54 @@ namespace drone_observer {
 
         void drawTrajectories() {
             // True Path (Green)
-            glLineWidth(2.0f);
+            glLineWidth(2.5f);
             glColor3f(0.0f, 1.0f, 0.4f);
             glBegin(GL_LINE_STRIP);
-            for (const auto &pt: true_path_) {
+            for (const auto &pt: true_path_)
                 glVertex3d(pt.x(), pt.y(), pt.z());
-            }
             glEnd();
 
-            // EKF Estimated Path (Red dashed look)
-            glLineWidth(2.0f);
+            // EKF Path (Red)
+            glLineWidth(1.5f);
             glColor3f(1.0f, 0.2f, 0.2f);
             glBegin(GL_LINE_STRIP);
-            for (const auto &pt: ekf_path_) {
+            for (const auto &pt: ekf_path_)
                 glVertex3d(pt.x(), pt.y(), pt.z());
-            }
+            glEnd();
+
+            // CKF Path (Cyan)
+            glLineWidth(1.5f);
+            glColor3f(0.0f, 0.9f, 1.0f);
+            glBegin(GL_LINE_STRIP);
+            for (const auto &pt: ckf_path_)
+                glVertex3d(pt.x(), pt.y(), pt.z());
+            glEnd();
+
+            // GHKF Path (Yellow)
+            glLineWidth(1.5f);
+            glColor3f(1.0f, 0.85f, 0.1f);
+            glBegin(GL_LINE_STRIP);
+            for (const auto &pt: ghkf_path_)
+                glVertex3d(pt.x(), pt.y(), pt.z());
             glEnd();
         }
 
         void drawDroneFrame(const Eigen::Vector3d &pos, const Eigen::Quaterniond &q) {
             glPushMatrix();
-
-            // Apply Position Translation and Quaternion Rotation to OpenGL matrix
             Eigen::Matrix4d T = Eigen::Matrix4d::Identity();
             T.block<3, 3>(0, 0) = q.toRotationMatrix();
             T.block<3, 1>(0, 3) = pos;
             glMultMatrixd(T.data());
 
-            // Quadrotor Cross Arms (Cyan/White)
             glLineWidth(3.0f);
             glColor3f(0.9f, 0.9f, 0.9f);
             glBegin(GL_LINES);
-            // Arm 1: (+x, +y) to (-x, -y)
             glVertex3d(arm_length_ * 0.707, arm_length_ * 0.707, 0);
             glVertex3d(-arm_length_ * 0.707, -arm_length_ * 0.707, 0);
-            // Arm 2: (+x, -y) to (-x, +y)
             glVertex3d(arm_length_ * 0.707, -arm_length_ * 0.707, 0);
             glVertex3d(-arm_length_ * 0.707, arm_length_ * 0.707, 0);
             glEnd();
 
-            // Draw 4 Rotor Rings
             glColor3f(0.2f, 0.6f, 1.0f);
             const double r_rotor = 0.08;
             double offsets[4][2] = {
@@ -187,7 +205,6 @@ namespace drone_observer {
                 }
                 glEnd();
             }
-
             glPopMatrix();
         }
     };

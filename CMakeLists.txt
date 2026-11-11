@@ -36,7 +36,10 @@ add_executable(drone_observer main.cpp
         include/drone_observer/dynamics/rk4_integrator.hpp
         include/drone_observer/estimation/ceres_auto_diff.hpp
         include/drone_observer/control/simple_pid.hpp
-        include/visualization/visualizer.hpp)
+        include/visualization/visualizer.hpp
+        include/drone_observer/estimation/ghkf_observer.hpp
+        include/drone_observer/estimation/ckf_observer.hpp
+        include/drone_observer/estimation/ekf_observer.hpp)
 
 target_include_directories(drone_observer PRIVATE
         ${EIGEN3_INCLUDE_DIR}
